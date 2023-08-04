@@ -146,15 +146,28 @@ impl Atom {
 
         ret.chain_id = pdb_line[21..22].to_owned();
 
-        ret.residue_number = pdb_line[22..26]
-            .parse()
-            .expect("failed to parse residue number");
+        ret.residue_number = match pdb_line[22..26].trim().parse() {
+            Ok(n) => n,
+            Err(e) => panic!(
+                "failed to parse {} as res number with {e}",
+                &pdb_line[22..26]
+            ),
+        };
 
         ret.insertion_code = pdb_line[26..27].to_owned();
 
-        let x: f64 = pdb_line[30..38].parse().expect("failed to parse x coord");
-        let y: f64 = pdb_line[38..46].parse().expect("failed to parse y coord");
-        let z: f64 = pdb_line[46..54].parse().expect("failed to parse z coord");
+        let x: f64 = pdb_line[30..38]
+            .trim()
+            .parse()
+            .expect("failed to parse x coord");
+        let y: f64 = pdb_line[38..46]
+            .trim()
+            .parse()
+            .expect("failed to parse y coord");
+        let z: f64 = pdb_line[46..54]
+            .trim()
+            .parse()
+            .expect("failed to parse z coord");
 
         let occupancy = pdb_line[54..60].parse().unwrap_or(1.0);
 
@@ -199,6 +212,13 @@ impl Atom {
         pdbstructure.next_residue_number = ret.residue_number + 1;
 
         ret
+    }
+
+    fn alternate_location_indicator(&self) -> &str {
+        let id = &self.default_location_id;
+        self.locations[id.as_str()]
+            .alternate_location_indicator
+            .as_str()
     }
 }
 
@@ -266,6 +286,18 @@ impl Residue {
     fn get_name(&self) -> &str {
         self.name_with_spaces.as_ref()
     }
+
+    fn finalize(&mut self) {
+        if !self.atoms.is_empty() {
+            self.atoms[0].is_first_atom_in_chain = self.is_first_in_chain;
+            self.atoms.last_mut().unwrap().is_final_atom_in_chain =
+                self.is_final_in_chain;
+            for atom in self.atoms.iter_mut() {
+                atom.is_first_residue_in_chain = self.is_first_in_chain;
+                atom.is_final_residue_in_chain = self.is_final_in_chain;
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -273,9 +305,9 @@ struct Chain {
     chain_id: String,
     residues: Vec<Residue>,
     has_ter_record: bool,
-    current_residue: Option<()>,
-    residues_by_num_icode: HashMap<(), ()>,
-    residues_by_number: HashMap<(), ()>,
+    current_residue: Option<Residue>,
+    residues_by_num_icode: HashMap<String, Residue>,
+    residues_by_number: HashMap<usize, Residue>,
 }
 
 impl Chain {
@@ -290,12 +322,48 @@ impl Chain {
         }
     }
 
-    fn add_atom(&self, atom: Atom) {
-        todo!()
+    fn add_atom(&mut self, atom: Atom) {
+        if self.residues.is_empty() {
+            let residue = Residue::new(
+                atom.residue_name_with_spaces.clone(),
+                atom.residue_number,
+                atom.insertion_code.clone(),
+                atom.alternate_location_indicator().to_owned(),
+            );
+            self.add_residue(residue);
+        }
     }
 
     fn iter_residues(&self) -> std::slice::Iter<'_, Residue> {
         self.residues.iter()
+    }
+
+    fn add_residue(&mut self, mut residue: Residue) {
+        if self.residues.is_empty() {
+            residue.is_first_in_chain = true;
+        }
+        self.residues.push(residue.clone());
+        self.current_residue = Some(residue.clone());
+        let key = residue.number.to_string() + &residue.insertion_code;
+        self.residues_by_num_icode
+            .entry(key)
+            .or_insert(residue.clone());
+        self.residues_by_number
+            .entry(residue.number)
+            .or_insert(residue);
+    }
+
+    fn add_ter_record(&mut self) {
+        self.has_ter_record = true;
+        self.finalize();
+    }
+
+    fn finalize(&mut self) {
+        self.residues[0].is_first_in_chain = true;
+        self.residues.last_mut().unwrap().is_final_in_chain = true;
+        for residue in self.residues.iter_mut() {
+            residue.finalize();
+        }
     }
 }
 
@@ -304,8 +372,8 @@ struct Model {
     number: usize,
     chains: Vec<Chain>,
     current_chain: Option<Chain>,
-    chains_by_id: HashMap<(), ()>,
-    connect: Vec<()>,
+    chains_by_id: HashMap<String, Chain>,
+    connects: Vec<Vec<usize>>,
 }
 
 impl Model {
@@ -315,7 +383,7 @@ impl Model {
             chains: Vec::new(),
             current_chain: None,
             chains_by_id: HashMap::new(),
-            connect: Vec::new(),
+            connects: Vec::new(),
         }
     }
 
@@ -327,8 +395,18 @@ impl Model {
         self.current_chain.as_mut().unwrap().add_atom(atom);
     }
 
-    fn add_chain(&mut self, chain_id: Chain) {
-        todo!()
+    fn add_chain(&mut self, chain: Chain) {
+        self.chains.push(chain.clone());
+        self.current_chain = Some(chain.clone());
+        self.chains_by_id
+            .entry(chain.chain_id.clone())
+            .or_insert(chain);
+    }
+
+    fn finalize(&mut self) {
+        for chain in self.chains.iter_mut() {
+            chain.finalize();
+        }
     }
 }
 
@@ -430,22 +508,26 @@ impl PdbStructure {
         extra_particle_identifier: String,
     ) -> Result<Self, Box<dyn Error>> {
         let f = std::fs::File::open(filename)?;
-        Ok(Self {
+        let mut ret = Self {
             load_all_models,
             extra_particle_identifier,
-            models: todo!(),
-            current_model: todo!(),
-            default_model: todo!(),
-            models_by_number: todo!(),
-            periodic_box_vectors: todo!(),
-            sequences: todo!(),
-            modified_residues: todo!(),
+            models: Vec::new(),
+            current_model: None,
+            default_model: None,
+            models_by_number: HashMap::new(),
+            periodic_box_vectors: None,
+            sequences: Vec::new(),
+            modified_residues: Vec::new(),
             next_atom_number: 1,
             next_residue_number: 1,
-        })
+        };
+        ret.load(f);
+        Ok(ret)
     }
 
     fn load(&mut self, f: impl Read) {
+        self.reset_atom_numbers();
+        self.reset_residue_numbers();
         let r = BufReader::new(f);
         let mut sel = Self::default();
         for pdb_line in r.lines().flatten() {
@@ -455,9 +537,33 @@ impl PdbStructure {
                     let atom = Atom::new(&pdb_line, self);
                     self.add_atom(atom);
                 }
-                _ => todo!("{command}"),
+                "CONECT" => {
+                    let atoms = pdb_line[6..]
+                        .split_ascii_whitespace()
+                        .flat_map(|s| s.parse::<usize>())
+                        .collect();
+                    self.current_model.as_mut().unwrap().connects.push(atoms);
+                }
+                "MODEL " => todo!(),
+                "ENDMDL" => todo!(),
+                "END   " => todo!(),
+                "TER   " => {
+                    self.current_model
+                        .as_mut()
+                        .unwrap()
+                        .current_chain
+                        .as_mut()
+                        .unwrap()
+                        .add_ter_record();
+                    self.reset_residue_numbers();
+                }
+                "CRYST1" => todo!(),
+                "SEQRES" => todo!(),
+                "MODRES" => todo!(),
+                _ => {}
             }
         }
+        self.finalize();
     }
 
     fn add_atom(&mut self, mut atom: Atom) {
@@ -485,6 +591,20 @@ impl PdbStructure {
             .iter()
             .flat_map(|model| model.chains.clone().into_iter())
             .collect()
+    }
+
+    fn reset_atom_numbers(&mut self) {
+        self.next_atom_number = 1;
+    }
+
+    fn reset_residue_numbers(&mut self) {
+        self.next_residue_number = 1;
+    }
+
+    fn finalize(&mut self) {
+        for model in self.models.iter_mut() {
+            model.finalize();
+        }
     }
 }
 
