@@ -1,4 +1,5 @@
 #![feature(lazy_cell)]
+#![allow(unused)]
 
 use std::{
     collections::HashMap,
@@ -18,13 +19,13 @@ macro_rules! q {
 mod element;
 
 #[derive(Clone)]
-struct Quantity<T> {
-    value: T,
-    unit: String,
+pub struct Quantity<T> {
+    pub value: T,
+    pub unit: String,
 }
 
 impl<T> Quantity<T> {
-    fn new(value: T, unit: impl Into<String>) -> Self {
+    pub fn new(value: T, unit: impl Into<String>) -> Self {
         Self {
             value,
             unit: unit.into(),
@@ -32,16 +33,17 @@ impl<T> Quantity<T> {
     }
 }
 
+#[allow(unused)]
 macro_rules! vec3 {
     ($x:expr, $y:expr, $z:expr) => {
         $crate::Vec3::new($x, $y, $z)
     };
 }
 
-struct Vec3 {
-    x: f64,
-    y: f64,
-    z: f64,
+pub struct Vec3 {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
 }
 
 impl Vec3 {
@@ -97,6 +99,7 @@ struct Atom {
     element_symbol: String,
     formal_charge: Option<isize>,
     element: Option<Element>,
+    model_number: usize,
 }
 
 impl Atom {
@@ -212,6 +215,66 @@ impl Atom {
     }
 }
 
+#[derive(Clone)]
+struct Chain {
+    chain_id: String,
+    residues: Vec<()>,
+    has_ter_record: bool,
+    current_residue: Option<()>,
+    residues_by_num_icode: HashMap<(), ()>,
+    residues_by_number: HashMap<(), ()>,
+}
+
+impl Chain {
+    fn new(chain_id: String) -> Self {
+        Self {
+            chain_id,
+            residues: Vec::new(),
+            has_ter_record: false,
+            current_residue: None,
+            residues_by_num_icode: HashMap::new(),
+            residues_by_number: HashMap::new(),
+        }
+    }
+
+    fn add_atom(&self, atom: Atom) {
+        todo!()
+    }
+}
+
+#[derive(Clone)]
+struct Model {
+    number: usize,
+    chains: Vec<()>,
+    current_chain: Option<Chain>,
+    chains_by_id: HashMap<(), ()>,
+    connect: Vec<()>,
+}
+
+impl Model {
+    fn new(number: usize) -> Self {
+        Self {
+            number,
+            chains: Vec::new(),
+            current_chain: None,
+            chains_by_id: HashMap::new(),
+            connect: Vec::new(),
+        }
+    }
+
+    fn add_atom(&mut self, atom: Atom) {
+        if self.chains.is_empty() {
+            self.add_chain(Chain::new(atom.chain_id.clone()));
+        }
+        self.add_chain(Chain::new(atom.chain_id.clone()));
+        self.current_chain.as_mut().unwrap().add_atom(atom);
+    }
+
+    fn add_chain(&mut self, chain_id: Chain) {
+        todo!()
+    }
+}
+
 /// PdbStructure object holds a parsed Protein Data Bank format file.
 ///
 /// Examples:
@@ -292,10 +355,10 @@ impl Atom {
 struct PdbStructure {
     load_all_models: bool,
     extra_particle_identifier: String,
-    models: Vec<()>,
-    current_model: Option<()>,
-    default_model: Option<()>,
-    models_by_number: HashMap<usize, ()>,
+    models: Vec<Model>,
+    current_model: Option<Model>,
+    default_model: Option<Model>,
+    models_by_number: HashMap<usize, Model>,
     periodic_box_vectors: Option<()>,
     sequences: Vec<()>,
     modified_residues: Vec<()>,
@@ -334,16 +397,30 @@ impl PdbStructure {
                 "ATOM  " | "HETATM" => {
                     let atom = Atom::new(&pdb_line, self);
                     self.add_atom(atom);
-                    if self.current_model.is_none() {}
-                    todo!()
                 }
                 _ => todo!("{command}"),
             }
         }
     }
 
-    fn add_atom(&mut self, atom: Atom) {
-        todo!()
+    fn add_atom(&mut self, mut atom: Atom) {
+        if self.current_model.is_none() {
+            self.add_model(Model::new(0));
+        }
+        atom.model_number = self.current_model.as_ref().unwrap().number;
+        self.current_model.as_mut().unwrap().add_atom(atom);
+    }
+
+    // TODO are these supposed to be references?? :O :(
+    fn add_model(&mut self, model: Model) {
+        if self.default_model.is_none() {
+            self.default_model = Some(model.clone());
+        }
+        self.models.push(model.clone());
+        self.current_model = Some(model.clone());
+        if !self.models_by_number.contains_key(&model.number) {
+            self.models_by_number.insert(model.number, model);
+        }
     }
 }
 
@@ -357,13 +434,19 @@ impl PdbStructure {
 /// complete the file.
 pub struct PDBFile {
     topology: Topology,
+    positions: Vec<Quantity<Vec3>>,
 }
 
 impl PDBFile {
     pub fn new(filename: impl AsRef<Path>) -> Self {
         let top = Topology::new();
         let pdb = PdbStructure::new(filename, true, "EP".to_owned());
-        Self { topology: top }
+        let positions = Vec::new();
+        // TODO
+        Self {
+            topology: top,
+            positions,
+        }
     }
 }
 
@@ -377,11 +460,11 @@ impl PDBFile {
 /// getPositions() to get the results.
 pub struct Modeller {
     topology: Topology,
-    positions: Vec<()>,
+    positions: Vec<Quantity<Vec3>>,
 }
 
 impl Modeller {
-    pub fn new(topology: Topology, positions: Vec<()>) -> Self {
+    pub fn new(topology: Topology, positions: Vec<Quantity<Vec3>>) -> Self {
         Self {
             topology,
             positions,
