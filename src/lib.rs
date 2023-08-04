@@ -6,9 +6,11 @@ use std::{
     error::Error,
     io::{BufRead, BufReader, Read},
     path::Path,
+    sync::LazyLock,
 };
 
 use element::{Element, BY_SYMBOL, EP};
+use topology::{Topology, Vec3};
 
 macro_rules! q {
     ($v:expr, $u:expr) => {
@@ -17,6 +19,8 @@ macro_rules! q {
 }
 
 mod element;
+
+pub mod topology;
 
 #[derive(Clone)]
 pub struct Quantity<T> {
@@ -33,25 +37,7 @@ impl<T> Quantity<T> {
     }
 }
 
-#[allow(unused)]
-macro_rules! vec3 {
-    ($x:expr, $y:expr, $z:expr) => {
-        $crate::Vec3::new($x, $y, $z)
-    };
-}
-
-pub struct Vec3 {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-}
-
-impl Vec3 {
-    fn new(x: f64, y: f64, z: f64) -> Self {
-        Self { x, y, z }
-    }
-}
-
+#[derive(Clone)]
 struct Location {
     alternate_location_indicator: String,
     xyz: Quantity<Vec3>,
@@ -79,7 +65,7 @@ impl Location {
 }
 
 /// Atom represents one atom in a PDB structure.
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Atom {
     is_first_atom_in_chain: bool,
     is_final_atom_in_chain: bool,
@@ -132,16 +118,17 @@ impl Atom {
     /// 77 - 78        LString(2)      Element symbol, right-justified.
     /// 79 - 80        LString(2)      Charge on the atom.
     fn new(pdb_line: &str, pdbstructure: &mut PdbStructure) -> Self {
-        let mut ret = Self::default();
-        ret.record_name = pdb_line[..6].trim().to_owned();
-
-        // TODO this could also be in hex supposedly
-        ret.serial_number = match pdb_line[6..11].parse() {
-            Ok(i) => i,
-            Err(_) => pdbstructure.next_atom_number,
+        let mut ret = Self {
+            record_name: pdb_line[..6].trim().to_owned(),
+            // TODO this could also be in hex supposedly
+            serial_number: match pdb_line[6..11].parse() {
+                Ok(i) => i,
+                Err(_) => pdbstructure.next_atom_number,
+            },
+            name_with_spaces: pdb_line[12..16].to_owned(),
+            ..Self::default()
         };
 
-        ret.name_with_spaces = pdb_line[12..16].to_owned();
         let alternate_location_indicator = &pdb_line[16..17];
 
         ret.residue_name_with_spaces = pdb_line[17..20].to_owned();
@@ -215,10 +202,76 @@ impl Atom {
     }
 }
 
+// TODO could just be Location if Resiude has its own module. internal to
+// Residue definition in Python
+#[derive(Clone)]
+struct ResLoc {
+    alternate_location_indicator: String,
+    residue_name_with_spaces: String,
+}
+
+impl ResLoc {
+    fn new(
+        alternate_location_indicator: String,
+        residue_name_with_spaces: String,
+    ) -> Self {
+        Self {
+            alternate_location_indicator,
+            residue_name_with_spaces,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct Residue {
+    primary_location_id: String,
+    locations: HashMap<String, ResLoc>,
+    name_with_spaces: String,
+    number: usize,
+    insertion_code: String,
+    atoms: Vec<Atom>,
+    atoms_by_name: HashMap<String, Atom>,
+    is_first_in_chain: bool,
+    is_final_in_chain: bool,
+    current_atom: Option<Atom>,
+}
+
+impl Residue {
+    fn new(
+        name: String,
+        number: usize,
+        insertion_code: String, // default = ' '
+        primary_alternate_location_indicator: String, // default = ' '
+    ) -> Self {
+        let alt_loc = primary_alternate_location_indicator;
+        Self {
+            primary_location_id: alt_loc.clone(),
+            // wtf is this?? is it supposed to be a reference? why do you store
+            // alt_loc in the value of the map if the key is also the alt_loc??
+            locations: HashMap::from([(
+                alt_loc.clone(),
+                ResLoc::new(alt_loc, name.clone()),
+            )]),
+            name_with_spaces: name,
+            number,
+            insertion_code,
+            atoms: Vec::new(),
+            atoms_by_name: HashMap::new(),
+            is_first_in_chain: false,
+            is_final_in_chain: false,
+            current_atom: None,
+        }
+    }
+
+    fn get_name(&self) -> &str {
+        self.name_with_spaces.as_ref()
+    }
+}
+
 #[derive(Clone)]
 struct Chain {
     chain_id: String,
-    residues: Vec<()>,
+    residues: Vec<Residue>,
     has_ter_record: bool,
     current_residue: Option<()>,
     residues_by_num_icode: HashMap<(), ()>,
@@ -240,12 +293,16 @@ impl Chain {
     fn add_atom(&self, atom: Atom) {
         todo!()
     }
+
+    fn iter_residues(&self) -> std::slice::Iter<'_, Residue> {
+        self.residues.iter()
+    }
 }
 
 #[derive(Clone)]
 struct Model {
     number: usize,
-    chains: Vec<()>,
+    chains: Vec<Chain>,
     current_chain: Option<Chain>,
     chains_by_id: HashMap<(), ()>,
     connect: Vec<()>,
@@ -418,11 +475,22 @@ impl PdbStructure {
         }
         self.models.push(model.clone());
         self.current_model = Some(model.clone());
-        if !self.models_by_number.contains_key(&model.number) {
-            self.models_by_number.insert(model.number, model);
-        }
+        self.models_by_number.entry(model.number).or_insert(model);
+    }
+
+    // TODO this should return an iterator, but I can't figure out how to get
+    // the signature right
+    fn iter_chains(&self) -> Vec<Chain> {
+        self.models
+            .iter()
+            .flat_map(|model| model.chains.clone().into_iter())
+            .collect()
     }
 }
+
+// TODO actually build this thing
+static RESIDUE_NAME_REPLACEMENTS: LazyLock<HashMap<String, String>> =
+    LazyLock::new(HashMap::new);
 
 /// PDBFile parses a Protein Data Bank (PDB) file and constructs a Topology and
 /// a set of atom positions from it.
@@ -439,10 +507,27 @@ pub struct PDBFile {
 
 impl PDBFile {
     pub fn new(filename: impl AsRef<Path>) -> Self {
-        let top = Topology::new();
-        let pdb = PdbStructure::new(filename, true, "EP".to_owned());
-        let positions = Vec::new();
-        // TODO
+        let mut top = Topology::new();
+        let pdb = PdbStructure::new(filename, true, "EP".to_owned()).unwrap();
+
+        // build the topology
+        for chain in pdb.iter_chains() {
+            let c = top.add_chain(chain.chain_id.clone());
+            for residue in chain.iter_residues() {
+                let mut res_name = residue.get_name();
+                if let Some(name) = RESIDUE_NAME_REPLACEMENTS.get(res_name) {
+                    res_name = name;
+                }
+                let r = top.add_residue(
+                    res_name,
+                    c.clone(),
+                    residue.number.to_string(),
+                    residue.insertion_code.clone(),
+                );
+            }
+        }
+        let mut positions = Vec::new();
+
         Self {
             topology: top,
             positions,
@@ -468,38 +553,6 @@ impl Modeller {
         Self {
             topology,
             positions,
-        }
-    }
-}
-
-/// Topology stores the topological information about a system.
-///
-/// The structure of a Topology object is similar to that of a PDB file. It
-/// consists of a set of Chains (often but not always corresponding to polymer
-/// chains). Each Chain contains a set of Residues, and each Residue contains a
-/// set of Atoms. In addition, the Topology stores a list of which atom pairs
-/// are bonded to each other, and the dimensions of the crystallographic unit
-/// cell.
-///
-/// Atom and residue names should follow the PDB 3.0 nomenclature for all
-/// molecules for which one exists.
-pub struct Topology {
-    chains: Vec<()>,
-    num_residues: usize,
-    num_atoms: usize,
-    bonds: Vec<()>,
-    periodic_box_vectors: Option<()>,
-}
-
-impl Topology {
-    /// Create a new Topology object
-    pub fn new() -> Self {
-        Self {
-            chains: Vec::new(),
-            num_residues: 0,
-            num_atoms: 0,
-            bonds: Vec::new(),
-            periodic_box_vectors: None,
         }
     }
 }
