@@ -1,9 +1,80 @@
+#![feature(lazy_cell)]
+
 use std::{
     collections::HashMap,
     error::Error,
     io::{BufRead, BufReader, Read},
     path::Path,
 };
+
+use element::{Element, BY_SYMBOL, EP};
+
+macro_rules! q {
+    ($v:expr, $u:expr) => {
+        Quantity::new($v, $u)
+    };
+}
+
+mod element;
+
+#[derive(Clone)]
+struct Quantity<T> {
+    value: T,
+    unit: String,
+}
+
+impl<T> Quantity<T> {
+    fn new(value: T, unit: impl Into<String>) -> Self {
+        Self {
+            value,
+            unit: unit.into(),
+        }
+    }
+}
+
+macro_rules! vec3 {
+    ($x:expr, $y:expr, $z:expr) => {
+        $crate::Vec3::new($x, $y, $z)
+    };
+}
+
+struct Vec3 {
+    x: f64,
+    y: f64,
+    z: f64,
+}
+
+impl Vec3 {
+    fn new(x: f64, y: f64, z: f64) -> Self {
+        Self { x, y, z }
+    }
+}
+
+struct Location {
+    alternate_location_indicator: String,
+    xyz: Quantity<Vec3>,
+    occupancy: f64,
+    temperature_factor: Quantity<f64>,
+    residue_name_with_spaces: String,
+}
+
+impl Location {
+    fn new(
+        alternate_location_indicator: String,
+        xyz: Quantity<Vec3>,
+        occupancy: f64,
+        temperature_factor: Quantity<f64>,
+        residue_name_with_spaces: String,
+    ) -> Self {
+        Self {
+            alternate_location_indicator,
+            xyz,
+            occupancy,
+            temperature_factor,
+            residue_name_with_spaces,
+        }
+    }
+}
 
 /// Atom represents one atom in a PDB structure.
 #[derive(Default)]
@@ -18,6 +89,14 @@ struct Atom {
     residue_name_with_spaces: String,
     residue_name: String,
     chain_id: String,
+    residue_number: usize,
+    insertion_code: String,
+    locations: HashMap<String, Location>,
+    default_location_id: String,
+    segment_id: String,
+    element_symbol: String,
+    formal_charge: Option<isize>,
+    element: Option<Element>,
 }
 
 impl Atom {
@@ -49,16 +128,12 @@ impl Atom {
     /// 73 - 76        LString(4)      Segment identifier, left-justified.
     /// 77 - 78        LString(2)      Element symbol, right-justified.
     /// 79 - 80        LString(2)      Charge on the atom.
-    fn new(
-        pdb_line: &str,
-        pdbstructure: PdbStructure,
-        extra_particle_identifier: &str,
-    ) -> Self {
+    fn new(pdb_line: &str, pdbstructure: &mut PdbStructure) -> Self {
         let mut ret = Self::default();
         ret.record_name = pdb_line[..6].trim().to_owned();
 
         // TODO this could also be in hex supposedly
-        ret.serial_number = match pdb_line[6..1].parse() {
+        ret.serial_number = match pdb_line[6..11].parse() {
             Ok(i) => i,
             Err(_) => pdbstructure.next_atom_number,
         };
@@ -80,6 +155,58 @@ impl Atom {
         ret.residue_name = ret.residue_name_with_spaces.trim().to_owned();
 
         ret.chain_id = pdb_line[21..22].to_owned();
+
+        ret.residue_number = pdb_line[22..26]
+            .parse()
+            .expect("failed to parse residue number");
+
+        ret.insertion_code = pdb_line[26..27].to_owned();
+
+        let x: f64 = pdb_line[30..38].parse().expect("failed to parse x coord");
+        let y: f64 = pdb_line[38..46].parse().expect("failed to parse y coord");
+        let z: f64 = pdb_line[46..54].parse().expect("failed to parse z coord");
+
+        let occupancy = pdb_line[54..60].parse().unwrap_or(1.0);
+
+        let temperature_factor = match pdb_line[60..66].parse::<f64>() {
+            Ok(t) => Quantity::new(t, "angstroms**2"),
+            Err(_) => Quantity::new(0.0, "angstroms**2"),
+        };
+
+        let loc = Location::new(
+            alternate_location_indicator.to_owned(),
+            Quantity::new(Vec3::new(x, y, z), "angstroms"),
+            occupancy,
+            temperature_factor,
+            ret.residue_name_with_spaces.clone(),
+        );
+
+        ret.locations
+            .insert(alternate_location_indicator.to_owned(), loc);
+        ret.default_location_id = alternate_location_indicator.to_owned();
+
+        ret.segment_id = pdb_line[72..76].trim().to_owned();
+        ret.element_symbol = pdb_line[76..78].trim().to_owned();
+
+        ret.formal_charge = match pdb_line[78..80].parse() {
+            Ok(c) => Some(c),
+            Err(_) => None,
+        };
+
+        if ret.element_symbol == pdbstructure.extra_particle_identifier {
+            ret.element = Some(EP.clone());
+        } else {
+            // try to find a sensible element symbol from columns 76-77
+            let e = BY_SYMBOL.get(ret.element_symbol.as_str());
+            if let Some(e) = e {
+                ret.element = Some(e.clone());
+            } else {
+                ret.element = None;
+            }
+        }
+
+        pdbstructure.next_atom_number = ret.serial_number + 1;
+        pdbstructure.next_residue_number = ret.residue_number + 1;
 
         ret
     }
@@ -205,19 +332,17 @@ impl PdbStructure {
             let command = &pdb_line[..6];
             match command {
                 "ATOM  " | "HETATM" => {
-                    self.add_atom(Atom::new(
-                        pdb_line,
-                        self,
-                        &self.extra_particle_identifier,
-                    ));
+                    let atom = Atom::new(&pdb_line, self);
+                    self.add_atom(atom);
                     if self.current_model.is_none() {}
                     todo!()
                 }
+                _ => todo!("{command}"),
             }
         }
     }
 
-    fn add_atom(&mut self, extra_particle_identifier: &str) {
+    fn add_atom(&mut self, atom: Atom) {
         todo!()
     }
 }
@@ -237,7 +362,7 @@ pub struct PDBFile {
 impl PDBFile {
     pub fn new(filename: impl AsRef<Path>) -> Self {
         let top = Topology::new();
-        let pdb = PdbStructure::new(filename);
+        let pdb = PdbStructure::new(filename, true, "EP".to_owned());
         Self { topology: top }
     }
 }
