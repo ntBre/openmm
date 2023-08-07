@@ -86,8 +86,10 @@ impl Residue {
     }
 }
 
-#[derive(Clone)]
-struct Atom;
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct Atom {
+    pub(crate) index: usize,
+}
 
 /// Topology stores the topological information about a system.
 ///
@@ -105,7 +107,7 @@ pub struct Topology {
     chains: Vec<Chain>,
     num_residues: usize,
     num_atoms: usize,
-    bonds: Vec<()>,
+    bonds: Vec<(Atom, Atom)>,
     periodic_box_vectors: Option<()>,
 }
 
@@ -155,6 +157,17 @@ impl Topology {
         self.num_residues += 1;
         chain.residues.push(residue.clone());
         residue
+    }
+
+    pub(crate) fn atoms(&self) -> impl Iterator<Item = &Atom> {
+        self.chains
+            .iter()
+            .flat_map(|chain| chain.residues.iter())
+            .flat_map(|residue| residue.atoms.iter())
+    }
+
+    pub(crate) fn bonds(&self) -> impl Iterator<Item = &(Atom, Atom)> {
+        self.bonds.iter()
     }
 }
 
