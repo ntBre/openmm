@@ -1,4 +1,11 @@
-use openmm_sys::OpenMM_State;
+use std::ffi::c_int;
+
+use openmm_sys::{
+    OpenMM_State, OpenMM_State_getPositions, OpenMM_Vec3Array_get,
+    OpenMM_Vec3Array_getSize,
+};
+
+use crate::{topology::Vec3, vec3};
 
 /// don't blame me, this is the name in C++
 bitflags::bitflags! {
@@ -21,5 +28,18 @@ pub struct State {
 impl State {
     pub fn new(state: *mut OpenMM_State) -> Self {
         Self { state }
+    }
+
+    pub fn get_positions(&self) -> Vec<Vec3> {
+        let positions =
+            unsafe { OpenMM_State_getPositions(self.state as *const _) };
+        let len = unsafe { OpenMM_Vec3Array_getSize(positions) };
+        let mut ret = Vec::with_capacity(len as usize);
+        for i in 0..len {
+            let v = unsafe { OpenMM_Vec3Array_get(positions, i as c_int) };
+            let (x, y, z) = unsafe { ((*v).x, (*v).y, (*v).z) };
+            ret.push(vec3![x, y, z]);
+        }
+        ret
     }
 }
