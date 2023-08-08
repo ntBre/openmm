@@ -1,8 +1,8 @@
 use std::ffi::c_int;
 
 use openmm_sys::{
-    OpenMM_State, OpenMM_State_getPositions, OpenMM_Vec3Array_get,
-    OpenMM_Vec3Array_getSize,
+    OpenMM_State, OpenMM_State_destroy, OpenMM_State_getPositions,
+    OpenMM_Vec3Array_get, OpenMM_Vec3Array_getSize,
 };
 
 use crate::{topology::Vec3, vec3};
@@ -41,5 +41,11 @@ impl State {
             ret.push(vec3![x, y, z]);
         }
         ret
+    }
+}
+
+impl Drop for State {
+    fn drop(&mut self) {
+        unsafe { OpenMM_State_destroy(self.state) }
     }
 }
