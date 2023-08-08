@@ -28,6 +28,7 @@ pub mod barostats;
 pub mod context;
 pub mod forcefield;
 pub mod integrators;
+pub mod platform;
 pub mod state;
 pub mod topology;
 
