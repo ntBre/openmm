@@ -1,11 +1,16 @@
 use std::ffi::c_int;
 
 use openmm_sys::{
-    OpenMM_VerletIntegrator, OpenMM_VerletIntegrator_create,
+    OpenMM_Integrator, OpenMM_VerletIntegrator, OpenMM_VerletIntegrator_create,
     OpenMM_VerletIntegrator_destroy, OpenMM_VerletIntegrator_step,
 };
 
-use crate::Integrator;
+pub trait Integrator {
+    /// # Safety
+    ///
+    /// no idea
+    unsafe fn integrator(&mut self) -> *mut OpenMM_Integrator;
+}
 
 pub struct Verlet {
     integrator: *mut OpenMM_VerletIntegrator,
@@ -32,4 +37,8 @@ impl Drop for Verlet {
     }
 }
 
-impl Integrator for Verlet {}
+impl Integrator for Verlet {
+    unsafe fn integrator(&mut self) -> *mut OpenMM_Integrator {
+        self.integrator as *mut OpenMM_Integrator
+    }
+}

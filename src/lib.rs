@@ -9,8 +9,11 @@ use std::{
     sync::LazyLock,
 };
 
+use context::Context;
 use element::{Element, BY_SYMBOL, EP};
 use forcefield::ForceField;
+use integrators::Integrator;
+use system::System;
 use topology::{Topology, Vec3};
 
 macro_rules! q {
@@ -22,6 +25,7 @@ macro_rules! q {
 mod element;
 
 pub mod barostats;
+pub mod context;
 pub mod forcefield;
 pub mod integrators;
 pub mod topology;
@@ -715,9 +719,7 @@ impl Modeller {
     }
 }
 
-pub struct System;
-
-pub trait Integrator {}
+pub mod system;
 
 /// Simulation provides a simplified API for running simulations with OpenMM and
 /// reporting results.
@@ -738,19 +740,20 @@ where
     pub topology: Topology,
     pub system: System,
     pub integrator: I,
-    pub context: (),
+    pub context: Context,
 }
 
 impl<I> Simulation<I>
 where
     I: Integrator,
 {
-    pub fn new(topology: Topology, system: System, integrator: I) -> Self {
+    pub fn new(topology: Topology, system: System, mut integrator: I) -> Self {
+        let context = Context::new(&system, &mut integrator);
         Self {
             topology,
             system,
             integrator,
-            context: (),
+            context,
         }
     }
 }
