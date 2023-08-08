@@ -21,7 +21,9 @@ macro_rules! q {
 
 mod element;
 
+pub mod barostats;
 pub mod forcefield;
+pub mod integrators;
 pub mod topology;
 
 #[derive(Clone)]
@@ -623,8 +625,8 @@ static RESIDUE_NAME_REPLACEMENTS: LazyLock<HashMap<String, String>> =
 /// writeModel() once for each model in the file, and finally writeFooter() to
 /// complete the file.
 pub struct PDBFile {
-    topology: Topology,
-    positions: Vec<Quantity<Vec3>>,
+    pub topology: Topology,
+    pub positions: Vec<Quantity<Vec3>>,
 }
 
 impl PDBFile {
@@ -666,8 +668,8 @@ impl PDBFile {
 /// created to represent the changed model. Finally, call getTopology() and
 /// getPositions() to get the results.
 pub struct Modeller {
-    topology: Topology,
-    positions: Vec<Quantity<Vec3>>,
+    pub topology: Topology,
+    pub positions: Vec<Quantity<Vec3>>,
 }
 
 impl Modeller {
@@ -715,7 +717,7 @@ impl Modeller {
 
 pub struct System;
 
-pub struct Integrator;
+pub trait Integrator {}
 
 /// Simulation provides a simplified API for running simulations with OpenMM and
 /// reporting results.
@@ -729,40 +731,26 @@ pub struct Integrator;
 /// displaying structures on the screen. For example, the following line will
 /// cause a file called "output.pdb" to be created, and a structure written to
 /// it every 1000 time steps:
-pub struct Simulation {
-    topology: Topology,
-    system: System,
-    integrator: Integrator,
+pub struct Simulation<I>
+where
+    I: Integrator,
+{
+    pub topology: Topology,
+    pub system: System,
+    pub integrator: I,
+    pub context: (),
 }
 
-impl Simulation {
-    pub fn new(
-        topology: Topology,
-        system: System,
-        integrator: Integrator,
-    ) -> Self {
+impl<I> Simulation<I>
+where
+    I: Integrator,
+{
+    pub fn new(topology: Topology, system: System, integrator: I) -> Self {
         Self {
             topology,
             system,
             integrator,
+            context: (),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// this is the part of the api I'm trying to replicate from ForceBalance
-    #[test]
-    fn openmmio() {
-        let pdb = PDBFile::new("testfiles/test.pdb");
-        let mut m = Modeller::new(pdb.topology, pdb.positions);
-        let ff = ForceField::new("testfiles/force-field.offxml").unwrap();
-        m.add_extra_particles(ff);
-        let topology = m.topology;
-        let system = todo!();
-        let integrator = todo!();
-        let simulation = Simulation::new(topology, system, integrator);
     }
 }

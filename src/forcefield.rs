@@ -2,6 +2,8 @@ use std::{collections::HashMap, error::Error, fs::read_to_string, path::Path};
 
 use xmltree::Element;
 
+use crate::{topology::Topology, System};
+
 /// A ForceField constructs OpenMM System objects based on a Topology
 #[derive(Default)]
 pub struct ForceField {
@@ -62,5 +64,10 @@ impl ForceField {
         }
 
         Ok(())
+    }
+
+    /// Construct an OpenMM System representing a Topology with this force field
+    pub fn create_system(&self, topology: Topology) -> System {
+        todo!()
     }
 }
