@@ -87,7 +87,7 @@ impl Residue {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub(crate) struct Atom {
+pub struct Atom {
     pub(crate) index: usize,
 }
 
@@ -159,7 +159,7 @@ impl Topology {
         residue
     }
 
-    pub(crate) fn atoms(&self) -> impl Iterator<Item = &Atom> {
+    pub fn atoms(&self) -> impl Iterator<Item = &Atom> {
         self.chains
             .iter()
             .flat_map(|chain| chain.residues.iter())

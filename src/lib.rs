@@ -719,6 +719,10 @@ impl Modeller {
 
         todo!()
     }
+
+    pub fn get_topology(&self) -> &Topology {
+        &self.topology
+    }
 }
 
 pub mod system;
