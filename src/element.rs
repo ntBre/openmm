@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::LazyLock};
 use crate::Quantity;
 
 #[derive(Clone)]
+#[allow(unused)]
 pub(crate) struct Element {
     atomic_number: usize,
     name: &'static str,

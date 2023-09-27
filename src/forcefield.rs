@@ -6,6 +6,7 @@ use crate::{topology::Topology, System};
 
 /// A ForceField constructs OpenMM System objects based on a Topology
 #[derive(Default)]
+#[allow(unused)]
 pub struct ForceField {
     atom_types: HashMap<(), ()>,
     templates: HashMap<(), ()>,
@@ -36,30 +37,30 @@ impl ForceField {
         let data = read_to_string(file)?;
         let root = Element::parse(data.as_bytes())?;
 
-        if let Some(types) = root.get_child("Include") {
+        if let Some(_types) = root.get_child("Include") {
             todo!();
         }
 
-        if let Some(types) = root.get_child("AtomTypes") {
+        if let Some(_types) = root.get_child("AtomTypes") {
             todo!();
         }
 
-        if let Some(types) = root.get_child("Residues") {
+        if let Some(_types) = root.get_child("Residues") {
             todo!();
         }
 
-        if let Some(types) = root.get_child("Patches") {
+        if let Some(_types) = root.get_child("Patches") {
             todo!();
         }
 
         // TODO if child.tag in parsers. not sure how parsers gets initialized,
         // so far this doesn't seem to do anything at all
 
-        if let Some(types) = root.get_child("Script") {
+        if let Some(_types) = root.get_child("Script") {
             todo!();
         }
 
-        if let Some(types) = root.get_child("InitializationScript") {
+        if let Some(_types) = root.get_child("InitializationScript") {
             todo!();
         }
 
@@ -67,7 +68,7 @@ impl ForceField {
     }
 
     /// Construct an OpenMM System representing a Topology with this force field
-    pub fn create_system(&self, topology: Topology) -> System {
+    pub fn create_system(&self, _topology: Topology) -> System {
         todo!()
     }
 }

@@ -20,6 +20,7 @@ impl Vec3 {
 
 /// A chain within a Topology
 #[derive(Clone)]
+#[allow(unused)]
 pub(crate) struct Chain {
     /// the index of the chain within its topology
     index: usize,
@@ -47,6 +48,7 @@ impl Chain {
 }
 
 #[derive(Clone)]
+#[allow(unused)]
 pub(crate) struct Residue {
     /// the name of the residue
     name: String,
@@ -103,6 +105,7 @@ pub struct Atom {
 /// Atom and residue names should follow the PDB 3.0 nomenclature for all
 /// molecules for which one exists.
 #[derive(Clone)]
+#[allow(unused)]
 pub struct Topology {
     chains: Vec<Chain>,
     num_residues: usize,
@@ -138,7 +141,7 @@ impl Topology {
         &mut self,
         name: &str,
         mut chain: Chain,
-        to_string: String,
+        _to_string: String,
         insertion_code: String,
     ) -> Residue {
         if !chain.residues.is_empty()

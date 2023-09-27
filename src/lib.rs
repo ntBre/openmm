@@ -1,5 +1,4 @@
 #![feature(lazy_cell)]
-#![allow(unused)]
 
 use std::{
     collections::{HashMap, HashSet},
@@ -47,6 +46,7 @@ impl<T> Quantity<T> {
     }
 }
 
+#[allow(unused)]
 #[derive(Clone)]
 struct Location {
     alternate_location_indicator: String,
@@ -81,8 +81,10 @@ struct Atom {
     is_final_atom_in_chain: bool,
     is_first_residue_in_chain: bool,
     is_final_residue_in_chain: bool,
+    #[allow(unused)]
     record_name: String,
     serial_number: usize,
+    #[allow(unused)]
     name_with_spaces: String,
     residue_name_with_spaces: String,
     residue_name: String,
@@ -234,6 +236,7 @@ impl Atom {
 
 // TODO could just be Location if Resiude has its own module. internal to
 // Residue definition in Python
+#[allow(unused)]
 #[derive(Clone)]
 struct ResLoc {
     alternate_location_indicator: String,
@@ -252,6 +255,7 @@ impl ResLoc {
     }
 }
 
+#[allow(unused)]
 #[derive(Clone)]
 struct Residue {
     primary_location_id: String,
@@ -496,6 +500,7 @@ impl Model {
 /// Will loop over all atom positions, including multiple alternate locations for atoms that have
 /// multiple positions.  The default value of include_alt_loc is False for the iter_positions()
 /// methods.
+#[allow(unused)]
 #[derive(Default)]
 struct PdbStructure {
     load_all_models: bool,
@@ -539,7 +544,7 @@ impl PdbStructure {
         self.reset_atom_numbers();
         self.reset_residue_numbers();
         let r = BufReader::new(f);
-        let mut sel = Self::default();
+        let _sel = Self::default();
         for pdb_line in r.lines().flatten() {
             let command = &pdb_line[..6];
             match command {
@@ -648,7 +653,7 @@ impl PDBFile {
                 if let Some(name) = RESIDUE_NAME_REPLACEMENTS.get(res_name) {
                     res_name = name;
                 }
-                let r = top.add_residue(
+                let _r = top.add_residue(
                     res_name,
                     c.clone(),
                     residue.number.to_string(),
@@ -656,7 +661,7 @@ impl PDBFile {
                 );
             }
         }
-        let mut positions = Vec::new();
+        let positions = Vec::new();
 
         Self {
             topology: top,
@@ -699,6 +704,7 @@ impl Modeller {
     /// remove them (...). It tries to match every residue in the Topology to a
     /// template in the force field. If there is no match, it will both add and
     /// remove extra particles as necessary to make it match.
+    #[allow(unused)]
     fn add_extra_particles(&mut self, forcefield: ForceField) {
         // record which atoms are bonded to each other atom
         let mut bonded_to_atom =
@@ -711,7 +717,7 @@ impl Modeller {
         // if the force field has a DrudeForce, record the types of Drude
         // particles and their parents since we'll need them for picking
         // positions
-        for force in forcefield.forces {
+        for _force in forcefield.forces {
             todo!();
         }
 
