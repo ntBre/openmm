@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::LazyLock};
 
 use crate::Quantity;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(unused)]
 pub(crate) struct Element {
     atomic_number: usize,

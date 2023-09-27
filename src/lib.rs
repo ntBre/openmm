@@ -47,10 +47,10 @@ impl<T> Quantity<T> {
 }
 
 #[allow(unused)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Location {
     alternate_location_indicator: String,
-    xyz: Quantity<Vec3>,
+    position: Quantity<Vec3>,
     occupancy: f64,
     temperature_factor: Quantity<f64>,
     residue_name_with_spaces: String,
@@ -66,7 +66,7 @@ impl Location {
     ) -> Self {
         Self {
             alternate_location_indicator,
-            xyz,
+            position: xyz,
             occupancy,
             temperature_factor,
             residue_name_with_spaces,
@@ -75,7 +75,7 @@ impl Location {
 }
 
 /// Atom represents one atom in a PDB structure.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 struct Atom {
     is_first_atom_in_chain: bool,
     is_final_atom_in_chain: bool,
@@ -232,12 +232,25 @@ impl Atom {
             .alternate_location_indicator
             .as_str()
     }
+
+    fn get_name(&self) -> &String {
+        &self.residue_name
+    }
+
+    fn get_position(&self) -> &Quantity<Vec3> {
+        &self.get_location().position
+    }
+
+    fn get_location(&self) -> &Location {
+        let id = &self.default_location_id;
+        &self.locations[id]
+    }
 }
 
 // TODO could just be Location if Resiude has its own module. internal to
 // Residue definition in Python
 #[allow(unused)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct ResLoc {
     alternate_location_indicator: String,
     residue_name_with_spaces: String,
@@ -256,7 +269,7 @@ impl ResLoc {
 }
 
 #[allow(unused)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Residue {
     primary_location_id: String,
     locations: HashMap<String, ResLoc>,
@@ -312,14 +325,25 @@ impl Residue {
             }
         }
     }
+
+    fn add_atom(&mut self, atom: Atom) {
+        let alt_loc = atom.alternate_location_indicator();
+        if !self.locations.contains_key(alt_loc) {
+            self.locations.insert(
+                alt_loc.to_owned(),
+                ResLoc::new(alt_loc.to_owned(), atom.residue_name_with_spaces),
+            );
+        }
+        todo!()
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Chain {
     chain_id: String,
     residues: Vec<Residue>,
     has_ter_record: bool,
-    current_residue: Option<Residue>,
+    current_residue: Option<usize>,
     residues_by_num_icode: HashMap<String, Residue>,
     residues_by_number: HashMap<usize, Residue>,
 }
@@ -345,7 +369,20 @@ impl Chain {
                 atom.alternate_location_indicator().to_owned(),
             );
             self.add_residue(residue);
+        } else if self.current_residue().number != atom.residue_number {
+        } else if self.current_residue().insertion_code != atom.insertion_code {
+        } else if self.current_residue().name_with_spaces
+            != atom.residue_name_with_spaces
+        {
+        } else if atom.alternate_location_indicator() != " " {
+        } else {
+            //warning
         }
+        self.current_residue().add_atom(atom);
+    }
+
+    fn current_residue(&mut self) -> &mut Residue {
+        &mut self.residues[self.current_residue.unwrap()]
     }
 
     fn iter_residues(&self) -> std::slice::Iter<'_, Residue> {
@@ -357,7 +394,7 @@ impl Chain {
             residue.is_first_in_chain = true;
         }
         self.residues.push(residue.clone());
-        self.current_residue = Some(residue.clone());
+        self.current_residue = Some(self.residues.len() - 1);
         let key = residue.number.to_string() + &residue.insertion_code;
         self.residues_by_num_icode
             .entry(key)
@@ -381,11 +418,11 @@ impl Chain {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Model {
     number: usize,
     chains: Vec<Chain>,
-    current_chain: Option<Chain>,
+    current_chain: Option<usize>,
     chains_by_id: HashMap<String, Chain>,
     connects: Vec<Vec<usize>>,
 }
@@ -401,17 +438,21 @@ impl Model {
         }
     }
 
+    fn current_chain(&mut self) -> &mut Chain {
+        &mut self.chains[self.current_chain.unwrap()]
+    }
+
     fn add_atom(&mut self, atom: Atom) {
         if self.chains.is_empty() {
             self.add_chain(Chain::new(atom.chain_id.clone()));
         }
         self.add_chain(Chain::new(atom.chain_id.clone()));
-        self.current_chain.as_mut().unwrap().add_atom(atom);
+        self.current_chain().add_atom(atom);
     }
 
     fn add_chain(&mut self, chain: Chain) {
         self.chains.push(chain.clone());
-        self.current_chain = Some(chain.clone());
+        self.current_chain = Some(self.chains.len() - 1);
         self.chains_by_id
             .entry(chain.chain_id.clone())
             .or_insert(chain);
@@ -421,6 +462,10 @@ impl Model {
         for chain in self.chains.iter_mut() {
             chain.finalize();
         }
+    }
+
+    fn iter_chains(&self) -> std::slice::Iter<'_, Chain> {
+        self.chains.iter()
     }
 }
 
@@ -506,7 +551,7 @@ struct PdbStructure {
     load_all_models: bool,
     extra_particle_identifier: String,
     models: Vec<Model>,
-    current_model: Option<Model>,
+    current_model: Option<usize>,
     default_model: Option<Model>,
     models_by_number: HashMap<usize, Model>,
     periodic_box_vectors: Option<()>,
@@ -540,11 +585,14 @@ impl PdbStructure {
         Ok(ret)
     }
 
+    fn current_model(&mut self) -> &mut Model {
+        &mut self.models[self.current_model.unwrap()]
+    }
+
     fn load(&mut self, f: impl Read) {
         self.reset_atom_numbers();
         self.reset_residue_numbers();
         let r = BufReader::new(f);
-        let _sel = Self::default();
         for pdb_line in r.lines().flatten() {
             let command = &pdb_line[..6];
             match command {
@@ -557,19 +605,13 @@ impl PdbStructure {
                         .split_ascii_whitespace()
                         .flat_map(|s| s.parse::<usize>())
                         .collect();
-                    self.current_model.as_mut().unwrap().connects.push(atoms);
+                    self.current_model().connects.push(atoms);
                 }
                 "MODEL " => todo!(),
                 "ENDMDL" => todo!(),
                 "END   " => todo!(),
                 "TER   " => {
-                    self.current_model
-                        .as_mut()
-                        .unwrap()
-                        .current_chain
-                        .as_mut()
-                        .unwrap()
-                        .add_ter_record();
+                    self.current_model().current_chain().add_ter_record();
                     self.reset_residue_numbers();
                 }
                 "CRYST1" => todo!(),
@@ -578,6 +620,7 @@ impl PdbStructure {
                 _ => {}
             }
         }
+        dbg!(self.current_model.as_ref().unwrap());
         self.finalize();
     }
 
@@ -585,8 +628,8 @@ impl PdbStructure {
         if self.current_model.is_none() {
             self.add_model(Model::new(0));
         }
-        atom.model_number = self.current_model.as_ref().unwrap().number;
-        self.current_model.as_mut().unwrap().add_atom(atom);
+        atom.model_number = self.current_model().number;
+        self.current_model().add_atom(atom);
     }
 
     // TODO are these supposed to be references?? :O :(
@@ -595,7 +638,7 @@ impl PdbStructure {
             self.default_model = Some(model.clone());
         }
         self.models.push(model.clone());
-        self.current_model = Some(model.clone());
+        self.current_model = Some(self.models.len() - 1);
         self.models_by_number.entry(model.number).or_insert(model);
     }
 
@@ -621,6 +664,19 @@ impl PdbStructure {
             model.finalize();
         }
     }
+
+    /// the default for `use_all_models` is actually false, in which case only
+    /// the first model is returned
+    fn iter_models(
+        &self,
+        use_all_models: bool,
+    ) -> Box<dyn Iterator<Item = &Model> + '_> {
+        if use_all_models {
+            Box::new(self.models.iter())
+        } else {
+            Box::new(self.models.iter().take(1))
+        }
+    }
 }
 
 // TODO actually build this thing
@@ -638,7 +694,7 @@ static RESIDUE_NAME_REPLACEMENTS: LazyLock<HashMap<String, String>> =
 #[derive(Debug)]
 pub struct PDBFile {
     pub topology: Topology,
-    pub positions: Vec<Quantity<Vec3>>,
+    pub positions: Vec<Quantity<Vec<Vec3>>>,
 }
 
 impl PDBFile {
@@ -662,7 +718,27 @@ impl PDBFile {
                 );
             }
         }
-        let positions = Vec::new();
+        let mut positions = Vec::new();
+        for model in pdb.iter_models(true) {
+            let mut coords = Vec::new();
+            for chain in dbg!(model).iter_chains() {
+                for residue in chain.iter_residues() {
+                    let mut processed_atom_names = HashSet::new();
+                    for atom in residue.atoms_by_name.values() {
+                        if processed_atom_names.contains(atom.get_name())
+                            || atom.residue_name != residue.get_name()
+                        {
+                            continue;
+                        }
+                        processed_atom_names.insert(atom.get_name());
+                        // TODO ensure nm
+                        let Quantity { value: pos, .. } = atom.get_position();
+                        coords.push(pos.clone());
+                    }
+                }
+            }
+            positions.push(Quantity::new(coords, "nanometers"));
+        }
 
         Self {
             topology: top,
@@ -681,11 +757,14 @@ impl PDBFile {
 /// getPositions() to get the results.
 pub struct Modeller {
     pub topology: Topology,
-    pub positions: Vec<Quantity<Vec3>>,
+    pub positions: Vec<Quantity<Vec<Vec3>>>,
 }
 
 impl Modeller {
-    pub fn new(topology: Topology, positions: Vec<Quantity<Vec3>>) -> Self {
+    pub fn new(
+        topology: Topology,
+        positions: Vec<Quantity<Vec<Vec3>>>,
+    ) -> Self {
         Self {
             topology,
             positions,
