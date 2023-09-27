@@ -7,8 +7,8 @@ use openmm_sys::{
 
 use crate::{topology::Vec3, vec3};
 
-/// don't blame me, this is the name in C++
 bitflags::bitflags! {
+    /// don't blame me, this is the name in C++
     #[repr(transparent)]
     pub struct DataType: u8 {
         const Positions = 1;
