@@ -31,7 +31,7 @@ pub mod platform;
 pub mod state;
 pub mod topology;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Quantity<T> {
     pub value: T,
     pub unit: String,
@@ -635,6 +635,7 @@ static RESIDUE_NAME_REPLACEMENTS: LazyLock<HashMap<String, String>> =
 /// contain multiple models. To do this, first call writeHeader(), then
 /// writeModel() once for each model in the file, and finally writeFooter() to
 /// complete the file.
+#[derive(Debug)]
 pub struct PDBFile {
     pub topology: Topology,
     pub positions: Vec<Quantity<Vec3>>,

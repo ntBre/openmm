@@ -5,7 +5,7 @@ macro_rules! vec3 {
     };
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Vec3 {
     pub x: f64,
     pub y: f64,
@@ -19,7 +19,7 @@ impl Vec3 {
 }
 
 /// A chain within a Topology
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(unused)]
 pub(crate) struct Chain {
     /// the index of the chain within its topology
@@ -47,7 +47,7 @@ impl Chain {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(unused)]
 pub(crate) struct Residue {
     /// the name of the residue
@@ -88,7 +88,7 @@ impl Residue {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Atom {
     pub(crate) index: usize,
 }
@@ -104,7 +104,7 @@ pub struct Atom {
 ///
 /// Atom and residue names should follow the PDB 3.0 nomenclature for all
 /// molecules for which one exists.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(unused)]
 pub struct Topology {
     chains: Vec<Chain>,
@@ -169,7 +169,7 @@ impl Topology {
             .flat_map(|residue| residue.atoms.iter())
     }
 
-    pub(crate) fn bonds(&self) -> impl Iterator<Item = &(Atom, Atom)> {
+    pub fn bonds(&self) -> impl Iterator<Item = &(Atom, Atom)> {
         self.bonds.iter()
     }
 }
