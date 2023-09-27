@@ -1,7 +1,6 @@
-use bitflags::Flags;
 use openmm_sys::{
     OpenMM_Context, OpenMM_Context_create, OpenMM_Context_destroy,
-    OpenMM_Context_getState, OpenMM_Integrator, OpenMM_System,
+    OpenMM_Context_getState,
 };
 
 use crate::{
