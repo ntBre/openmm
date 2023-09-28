@@ -824,3 +824,15 @@ impl Modeller {
         &self.topology
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pdb_file() {
+        let pdb = PDBFile::new("testfiles/formaldehyde.pdb");
+        dbg!(&pdb);
+        assert_eq!(pdb.positions.len(), 4);
+    }
+}
