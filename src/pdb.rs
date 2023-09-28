@@ -275,6 +275,12 @@ impl<K: PartialEq, V> VecMap<K, V> {
     }
 }
 
+impl<K: PartialEq, V> Default for VecMap<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Residue {
     #[allow(unused)]
@@ -410,9 +416,10 @@ impl Chain {
             panic!("case 3");
         } else if self.current_residue().name_with_spaces
             == atom.residue_name_with_spaces
-        {
+        ||
             // normal case: number, name, and icode have not changed
-        } else if atom.alternate_location_indicator() != " " {
+         atom.alternate_location_indicator() != " "
+        {
             // ok - this is a point mutation, add_atom will know what to do
         } else {
             eprintln!("warning: two consecutive residues with the same number");
@@ -808,7 +815,7 @@ impl PDBFile {
                     for atom in residue.atoms_by_name.values() {
                         let name = atom.get_name();
                         if processed_atom_names.contains(name)
-                            || &atom.residue_name != residue.get_name()
+                            || atom.residue_name != residue.get_name()
                         {
                             continue;
                         }

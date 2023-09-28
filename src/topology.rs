@@ -212,7 +212,7 @@ impl Topology {
         r: &mut Residue,
         serial_number: usize,
     ) -> Atom {
-        if r.atoms.len() > 0
+        if !r.atoms.is_empty()
             && self.num_atoms != r.atoms.last().unwrap().index + 1
         {
             panic!("all atoms within a residue must be contiguous");
