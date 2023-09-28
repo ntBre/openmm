@@ -280,7 +280,7 @@ struct Residue {
     atoms_by_name: HashMap<String, Atom>,
     is_first_in_chain: bool,
     is_final_in_chain: bool,
-    current_atom: Option<Atom>,
+    current_atom: Option<usize>,
 }
 
 impl Residue {
@@ -331,10 +331,35 @@ impl Residue {
         if !self.locations.contains_key(alt_loc) {
             self.locations.insert(
                 alt_loc.to_owned(),
-                ResLoc::new(alt_loc.to_owned(), atom.residue_name_with_spaces),
+                ResLoc::new(
+                    alt_loc.to_owned(),
+                    atom.residue_name_with_spaces.clone(),
+                ),
             );
         }
-        todo!()
+        assert_eq!(atom.residue_number, self.number);
+        assert_eq!(atom.insertion_code, self.insertion_code);
+        if self.atoms_by_name.contains_key(&atom.name_with_spaces) {
+            let old_atom =
+                self.atoms_by_name.get_mut(&atom.name_with_spaces).unwrap();
+            if old_atom
+                .locations
+                .contains_key(atom.alternate_location_indicator())
+            {
+                eprintln!("warning duplicate atoms");
+            } else {
+                for (alt_loc, position) in atom.locations {
+                    old_atom.locations.insert(alt_loc, position);
+                }
+                return; // no new atom added
+            }
+        }
+        self.atoms_by_name
+            .insert(atom.get_name().to_owned(), atom.clone());
+        self.atoms_by_name
+            .insert(atom.name_with_spaces.clone(), atom.clone());
+        self.atoms.push(atom);
+        self.current_atom = Some(self.atoms.len() - 1);
     }
 }
 
@@ -370,13 +395,18 @@ impl Chain {
             );
             self.add_residue(residue);
         } else if self.current_residue().number != atom.residue_number {
+            panic!("case 2");
         } else if self.current_residue().insertion_code != atom.insertion_code {
+            panic!("case 3");
         } else if self.current_residue().name_with_spaces
             != atom.residue_name_with_spaces
         {
+            panic!("case 4");
         } else if atom.alternate_location_indicator() != " " {
+            panic!("case 5");
         } else {
             //warning
+            eprintln!("warning: two consecutive residues with the same number");
         }
         self.current_residue().add_atom(atom);
     }
@@ -446,7 +476,13 @@ impl Model {
         if self.chains.is_empty() {
             self.add_chain(Chain::new(atom.chain_id.clone()));
         }
-        self.add_chain(Chain::new(atom.chain_id.clone()));
+        // shouldn't these be else if with above?? or can only one be true at
+        // once? either way else if would clarify the intent
+        if self.current_chain().chain_id != atom.chain_id
+            || self.current_chain().has_ter_record
+        {
+            self.add_chain(Chain::new(atom.chain_id.clone()));
+        }
         self.current_chain().add_atom(atom);
     }
 
@@ -620,7 +656,6 @@ impl PdbStructure {
                 _ => {}
             }
         }
-        dbg!(self.current_model.as_ref().unwrap());
         self.finalize();
     }
 
@@ -721,7 +756,7 @@ impl PDBFile {
         let mut positions = Vec::new();
         for model in pdb.iter_models(true) {
             let mut coords = Vec::new();
-            for chain in dbg!(model).iter_chains() {
+            for chain in model.iter_chains() {
                 for residue in chain.iter_residues() {
                     let mut processed_atom_names = HashSet::new();
                     for atom in residue.atoms_by_name.values() {
