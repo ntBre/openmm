@@ -2,6 +2,8 @@ use std::ops::Mul;
 
 use crate::element::Element;
 
+mod utils;
+
 #[macro_export]
 macro_rules! vec3 {
     ($x:expr, $y:expr, $z:expr) => {

@@ -9,3 +9,4 @@ edition = "2021"
 bitflags = "2.3.3"
 openmm-sys = { path = "../openmm-sys" }
 xmltree = "0.10.3"
+torx = { path = "../torx" }
