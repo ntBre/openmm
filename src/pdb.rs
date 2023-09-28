@@ -209,8 +209,8 @@ impl Atom {
             .as_str()
     }
 
-    pub(crate) fn get_name(&self) -> &String {
-        &self.residue_name
+    pub(crate) fn get_name(&self) -> &str {
+        self.name_with_spaces.trim()
     }
 
     pub(crate) fn get_position(&self) -> &Quantity<Vec3> {
@@ -833,6 +833,7 @@ mod tests {
     fn pdb_file() {
         let pdb = PDBFile::new("testfiles/formaldehyde.pdb");
         dbg!(&pdb);
-        assert_eq!(pdb.positions.len(), 4);
+        assert_eq!(pdb.positions.len(), 1);
+        assert_eq!(pdb.positions[0].value.len(), 4);
     }
 }
