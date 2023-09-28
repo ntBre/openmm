@@ -287,7 +287,9 @@ impl Residue {
     }
 
     pub(crate) fn get_name(&self) -> &str {
-        self.name_with_spaces.as_ref()
+        let alt_loc = &self.primary_location_id;
+        let loc = &self.locations[alt_loc];
+        loc.residue_name_with_spaces.trim()
     }
 
     pub(crate) fn finalize(&mut self) {
