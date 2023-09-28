@@ -13,6 +13,7 @@ use crate::topology::Vec3;
 /// different ways. Each time you do, a new Topology and list of coordinates is
 /// created to represent the changed model. Finally, call getTopology() and
 /// getPositions() to get the results.
+#[derive(Clone)]
 pub struct Modeller {
     pub topology: Topology,
     pub positions: Quantity<Vec<Vec3>>,

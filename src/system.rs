@@ -13,6 +13,13 @@ pub struct System {
     pub(crate) system: *mut OpenMM_System,
 }
 
+impl Clone for System {
+    fn clone(&self) -> Self {
+        // TODO actually copy the fields over
+        Self::new()
+    }
+}
+
 impl System {
     pub fn new() -> Self {
         Self {
