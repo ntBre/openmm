@@ -246,6 +246,36 @@ impl ResLoc {
 }
 
 #[derive(Clone, Debug)]
+pub struct VecMap<K, V> {
+    inner: Vec<(K, V)>,
+}
+
+impl<K: PartialEq, V> VecMap<K, V> {
+    pub fn new() -> Self {
+        Self { inner: Vec::new() }
+    }
+
+    pub fn contains_key(&self, key: &K) -> bool {
+        self.inner.iter().any(|(k, _v)| k == key)
+    }
+
+    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
+        self.inner
+            .iter_mut()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v)
+    }
+
+    pub fn insert(&mut self, key: K, value: V) {
+        self.inner.push((key, value));
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &V> {
+        self.inner.iter().map(|(_, v)| v)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct Residue {
     #[allow(unused)]
     pub(crate) primary_location_id: String,
@@ -254,7 +284,7 @@ pub(crate) struct Residue {
     pub(crate) number: usize,
     pub(crate) insertion_code: String,
     pub(crate) atoms: Vec<Atom>,
-    pub(crate) atoms_by_name: HashMap<String, Atom>,
+    pub(crate) atoms_by_name: VecMap<String, Atom>,
     pub(crate) is_first_in_chain: bool,
     pub(crate) is_final_in_chain: bool,
     pub(crate) current_atom: Option<usize>,
@@ -280,7 +310,7 @@ impl Residue {
             number,
             insertion_code,
             atoms: Vec::new(),
-            atoms_by_name: HashMap::new(),
+            atoms_by_name: VecMap::new(),
             is_first_in_chain: false,
             is_final_in_chain: false,
             current_atom: None,
@@ -839,26 +869,19 @@ mod tests {
 
     #[test]
     fn pdb_file() {
-        let mut pdb = PDBFile::new("testfiles/formaldehyde.pdb");
-        // why are my positions in the reverse order??
+        let pdb = PDBFile::new("testfiles/formaldehyde.pdb");
         assert_eq!(pdb.positions.len(), 4);
         let want = Quantity {
             value: vec![
-                vec3![-0.10980000000000001, 0.0149, 0.0015],
                 vec3![0.009500000000000001, 0.0011, 0.0],
                 vec3![0.051300000000000005, -0.10980000000000001, -0.0004],
+                vec3![-0.10980000000000001, 0.0149, 0.0015],
                 vec3![0.059, 0.0938, -0.0011],
             ],
             unit: "nanometers".to_owned(),
         };
-        // the iteration over atom names is over a HashMap, so the order is
-        // random, unlike in Python. this isn't the best sort scheme but it
-        // works here at least
-        pdb.positions.sort_by(|a, b| a.x.total_cmp(&b.x));
-        // oh boy, we can't sort like this because the order needs to be the
-        // same as the topology. going to have to use a BTreeMap or just a
-        // vector. probably a vector is fine for such small sets
         assert_eq!(pdb.positions, want);
+
         use topology::Atom as Tat;
         let mut want_top = Topology {
             chains: vec![],
