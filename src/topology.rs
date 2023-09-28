@@ -1,7 +1,7 @@
 #[macro_export]
 macro_rules! vec3 {
     ($x:expr, $y:expr, $z:expr) => {
-        $crate::Vec3::new($x, $y, $z)
+        $crate::topology::Vec3::new($x, $y, $z)
     };
 }
 
