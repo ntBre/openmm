@@ -43,10 +43,6 @@ impl Element {
     }
 }
 
-pub fn element(symbol: &'static str) -> Element {
-    BY_SYMBOL[symbol].clone()
-}
-
 pub(crate) static EP: LazyLock<Element> =
     LazyLock::new(|| Element::new(0, "EP", "EP", Quantity::new(0.0, "EP")));
 

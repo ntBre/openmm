@@ -11,7 +11,7 @@
 
 use crate::quantity::Quantity;
 use crate::{
-    element::{element, Element, BY_SYMBOL, EP},
+    element::{Element, BY_SYMBOL, EP},
     topology::{Topology, Vec3},
 };
 use std::{
@@ -863,9 +863,13 @@ impl PDBFile {
 
 #[cfg(test)]
 mod tests {
-    use crate::{element::element, topology, vec3};
+    use crate::{topology, vec3};
 
     use super::*;
+
+    pub fn element(symbol: &'static str) -> Element {
+        BY_SYMBOL[symbol].clone()
+    }
 
     #[test]
     fn pdb_file() {
