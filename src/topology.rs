@@ -41,10 +41,6 @@ pub(crate) struct Chain {
     /// the index of the chain within its topology
     pub(crate) index: usize,
 
-    /// the topology this chain belongs to. TODO surely this needs to be a
-    /// reference, but that's very scary
-    pub(crate) topology: Topology,
-
     /// a user-defined identifier for this Chain
     pub(crate) id: String,
 
@@ -53,10 +49,9 @@ pub(crate) struct Chain {
 }
 
 impl Chain {
-    fn new(index: usize, topology: Topology, id: String) -> Self {
+    fn new(index: usize, id: String) -> Self {
         Self {
             index,
-            topology,
             id,
             residues: Vec::new(),
         }
@@ -166,7 +161,7 @@ impl Topology {
     pub(crate) fn add_chain(&mut self, id: String) -> Chain {
         // TODO id can actually be an option, generate it as
         // str(self.chains.len() + 1)
-        let chain = Chain::new(self.chains.len(), self.clone(), id);
+        let chain = Chain::new(self.chains.len(), id);
         self.chains.push(chain.clone());
         chain
     }

@@ -943,7 +943,6 @@ mod tests {
         // can't really handle with real lifetimes
         let chain = topology::Chain {
             index: 0,
-            topology: want_top.clone(),
             id: "A".to_owned(),
             residues: vec![],
         };
