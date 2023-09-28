@@ -15,14 +15,11 @@ use crate::topology::Vec3;
 /// getPositions() to get the results.
 pub struct Modeller {
     pub topology: Topology,
-    pub positions: Vec<Quantity<Vec<Vec3>>>,
+    pub positions: Quantity<Vec<Vec3>>,
 }
 
 impl Modeller {
-    pub fn new(
-        topology: Topology,
-        positions: Vec<Quantity<Vec<Vec3>>>,
-    ) -> Self {
+    pub fn new(topology: Topology, positions: Quantity<Vec<Vec3>>) -> Self {
         Self {
             topology,
             positions,
