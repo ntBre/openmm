@@ -738,12 +738,13 @@ impl PDBFile {
                 for residue in chain.iter_residues() {
                     let mut processed_atom_names = HashSet::new();
                     for atom in residue.atoms_by_name.values() {
-                        if processed_atom_names.contains(atom.get_name())
-                            || atom.residue_name != residue.get_name()
+                        let name = atom.get_name();
+                        if processed_atom_names.contains(name)
+                            || &atom.residue_name != residue.get_name()
                         {
                             continue;
                         }
-                        processed_atom_names.insert(atom.get_name());
+                        processed_atom_names.insert(name);
                         // TODO ensure nm
                         let Quantity { value: pos, .. } = atom.get_position();
                         coords.push(pos.clone());
