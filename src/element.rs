@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, hash::Hash, sync::LazyLock};
 
 use crate::quantity::Quantity;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
 pub(crate) struct Element {
     atomic_number: usize,
@@ -10,6 +10,16 @@ pub(crate) struct Element {
     symbol: &'static str,
     mass: Quantity<f64>,
 }
+
+impl Hash for Element {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.atomic_number.hash(state);
+        self.name.hash(state);
+        self.symbol.hash(state);
+    }
+}
+
+impl Eq for Element {}
 
 macro_rules! e {
     ($a:expr, $n:expr, $s:expr, $m:expr) => {
@@ -31,6 +41,10 @@ impl Element {
             mass,
         }
     }
+}
+
+pub fn element(symbol: &'static str) -> Element {
+    BY_SYMBOL[symbol].clone()
 }
 
 pub(crate) static EP: LazyLock<Element> =

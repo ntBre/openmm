@@ -1,5 +1,7 @@
 use std::ops::Mul;
 
+use crate::element::Element;
+
 #[macro_export]
 macro_rules! vec3 {
     ($x:expr, $y:expr, $z:expr) => {
@@ -33,21 +35,21 @@ impl Mul<f64> for Vec3 {
 }
 
 /// A chain within a Topology
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
 pub(crate) struct Chain {
     /// the index of the chain within its topology
-    index: usize,
+    pub(crate) index: usize,
 
     /// the topology this chain belongs to. TODO surely this needs to be a
     /// reference, but that's very scary
-    topology: Topology,
+    pub(crate) topology: Topology,
 
     /// a user-defined identifier for this Chain
-    id: String,
+    pub(crate) id: String,
 
     /// the residues composing the chain
-    residues: Vec<Residue>,
+    pub(crate) residues: Vec<Residue>,
 }
 
 impl Chain {
@@ -61,7 +63,7 @@ impl Chain {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
 pub(crate) struct Residue {
     /// the name of the residue
@@ -102,9 +104,29 @@ impl Residue {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq)]
 pub struct Atom {
+    pub(crate) name: String,
+    pub(crate) element: Element,
+    /// the index of the atom within its topology
     pub(crate) index: usize,
+    pub(crate) id: usize,
+}
+
+impl Atom {
+    pub(crate) fn new(
+        name: String,
+        element: Element,
+        index: usize,
+        id: usize,
+    ) -> Self {
+        Self {
+            name,
+            element,
+            index,
+            id,
+        }
+    }
 }
 
 /// Topology stores the topological information about a system.
@@ -118,14 +140,13 @@ pub struct Atom {
 ///
 /// Atom and residue names should follow the PDB 3.0 nomenclature for all
 /// molecules for which one exists.
-#[derive(Clone, Debug)]
-#[allow(unused)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Topology {
-    chains: Vec<Chain>,
-    num_residues: usize,
-    num_atoms: usize,
-    bonds: Vec<(Atom, Atom)>,
-    periodic_box_vectors: Option<()>,
+    pub(crate) chains: Vec<Chain>,
+    pub(crate) num_residues: usize,
+    pub(crate) num_atoms: usize,
+    pub(crate) bonds: Vec<(Atom, Atom)>,
+    pub(crate) periodic_box_vectors: Option<()>,
 }
 
 impl Topology {
@@ -185,6 +206,28 @@ impl Topology {
 
     pub fn bonds(&self) -> impl Iterator<Item = &(Atom, Atom)> {
         self.bonds.iter()
+    }
+
+    pub(crate) fn add_atom(
+        &mut self,
+        name: String,
+        element: Element,
+        r: &mut Residue,
+        serial_number: usize,
+    ) -> Atom {
+        if r.atoms.len() > 0
+            && self.num_atoms != r.atoms.last().unwrap().index + 1
+        {
+            panic!("all atoms within a residue must be contiguous");
+        }
+        let atom = Atom::new(name, element, self.num_atoms, serial_number);
+        self.num_atoms += 1;
+        r.atoms.push(atom.clone());
+        atom
+    }
+
+    pub(crate) fn add_bond(&mut self, bond_1: Atom, bond_2: Atom) {
+        self.bonds.push((bond_1, bond_2));
     }
 }
 

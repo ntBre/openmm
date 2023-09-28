@@ -11,7 +11,7 @@
 
 use crate::quantity::Quantity;
 use crate::{
-    element::{Element, BY_SYMBOL, EP},
+    element::{element, Element, BY_SYMBOL, EP},
     topology::{Topology, Vec3},
 };
 use std::{
@@ -697,6 +697,10 @@ impl PdbStructure {
 pub(crate) static RESIDUE_NAME_REPLACEMENTS: LazyLock<HashMap<String, String>> =
     LazyLock::new(HashMap::new);
 
+pub(crate) static ATOM_NAME_REPLACEMENTS: LazyLock<
+    HashMap<String, HashMap<String, String>>,
+> = LazyLock::new(HashMap::new);
+
 /// PDBFile parses a Protein Data Bank (PDB) file and constructs a Topology and
 /// a set of atom positions from it.
 ///
@@ -713,10 +717,11 @@ pub struct PDBFile {
 
 impl PDBFile {
     pub fn new(filename: impl AsRef<Path>) -> Self {
-        let mut top = Topology::new();
         let pdb = PdbStructure::new(filename, true, "EP".to_owned()).unwrap();
 
         // build the topology
+        let mut atom_by_number = HashMap::new();
+        let mut top = Topology::new();
         for chain in pdb.iter_chains() {
             let c = top.add_chain(chain.chain_id.clone());
             for residue in chain.iter_residues() {
@@ -724,14 +729,46 @@ impl PDBFile {
                 if let Some(name) = RESIDUE_NAME_REPLACEMENTS.get(res_name) {
                     res_name = name;
                 }
-                let _r = top.add_residue(
+                let mut r = top.add_residue(
                     res_name,
                     c.clone(),
                     residue.number.to_string(),
                     residue.insertion_code.clone(),
                 );
+                // TODO this is actually supposed to be a HashMap, but I'm not
+                // building these replacement maps at all yet
+                let atom_replacements =
+                    if let Some(name) = ATOM_NAME_REPLACEMENTS.get(res_name) {
+                        name.clone()
+                    } else {
+                        HashMap::new()
+                    };
+                let mut processed_atom_names = HashSet::new();
+                for atom in residue.atoms_by_name.values() {
+                    let mut atom_name = atom.get_name().to_owned();
+                    if processed_atom_names.contains(&atom_name)
+                        || atom.residue_name != residue.get_name()
+                    {
+                        continue;
+                    }
+                    processed_atom_names.insert(atom_name.clone());
+                    if atom_replacements.contains_key(&atom_name) {
+                        atom_name = atom_replacements[&atom_name].clone();
+                    }
+                    atom_name = atom_name.trim().to_owned();
+                    // TODO be more careful here, "try to guess element"
+                    let element = atom.element.as_ref().unwrap();
+                    let new_atom = top.add_atom(
+                        atom_name,
+                        element.clone(),
+                        &mut r,
+                        atom.serial_number,
+                    );
+                    atom_by_number.insert(atom.serial_number, new_atom);
+                }
             }
         }
+
         let mut positions = Vec::new();
         for model in pdb.iter_models(true) {
             let mut coords = Vec::new();
@@ -755,6 +792,36 @@ impl PDBFile {
             positions.push(Quantity::new(coords, "nanometers"));
         }
 
+        // TODO there are bonds to insert here
+        let mut connect_bonds = Vec::new();
+        for connect in &pdb.models.last().unwrap().connects {
+            let i = connect[0];
+            for j in &connect[1..] {
+                if atom_by_number.contains_key(&i)
+                    && atom_by_number.contains_key(j)
+                {
+                    // TODO some other checks here about metals and missing
+                    // elements
+                    connect_bonds.push((
+                        atom_by_number[&i].clone(),
+                        atom_by_number[j].clone(),
+                    ));
+                }
+            }
+        }
+
+        let mut existing_bonds: HashSet<_> =
+            top.bonds.clone().into_iter().collect();
+        for bond in connect_bonds {
+            if existing_bonds.contains(&bond)
+                || existing_bonds.contains(&(bond.1.clone(), bond.0.clone()))
+            {
+                continue;
+            }
+            existing_bonds.insert(bond.clone());
+            top.add_bond(bond.0, bond.1);
+        }
+
         Self {
             topology: top,
             // if the file contains multiple frames, these are the positions in
@@ -764,10 +831,9 @@ impl PDBFile {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::{topology, vec3};
+    use crate::{element::element, topology, vec3};
 
     use super::*;
 
@@ -776,19 +842,102 @@ mod tests {
         let mut pdb = PDBFile::new("testfiles/formaldehyde.pdb");
         // why are my positions in the reverse order??
         assert_eq!(pdb.positions.len(), 4);
-        // the iteration over atom names is over a HashMap, so the order is
-        // random, unlike in Python. this isn't the best sort scheme but it
-        // works here at least
         let want = Quantity {
             value: vec![
-                vec3!(-0.10980000000000001, 0.0149, 0.0015),
-                vec3!(0.009500000000000001, 0.0011, 0.0),
-                vec3!(0.051300000000000005, -0.10980000000000001, -0.0004),
-                vec3!(0.059, 0.0938, -0.0011),
+                vec3![-0.10980000000000001, 0.0149, 0.0015],
+                vec3![0.009500000000000001, 0.0011, 0.0],
+                vec3![0.051300000000000005, -0.10980000000000001, -0.0004],
+                vec3![0.059, 0.0938, -0.0011],
             ],
             unit: "nanometers".to_owned(),
         };
+        // the iteration over atom names is over a HashMap, so the order is
+        // random, unlike in Python. this isn't the best sort scheme but it
+        // works here at least
         pdb.positions.sort_by(|a, b| a.x.total_cmp(&b.x));
+        // oh boy, we can't sort like this because the order needs to be the
+        // same as the topology. going to have to use a BTreeMap or just a
+        // vector. probably a vector is fine for such small sets
         assert_eq!(pdb.positions, want);
+        use topology::Atom as Tat;
+        let mut want_top = Topology {
+            chains: vec![],
+            num_residues: 1,
+            num_atoms: 4,
+            bonds: vec![
+                //
+                (
+                    Tat {
+                        name: "C".to_owned(),
+                        element: element("C"),
+                        index: 0,
+                        id: 1,
+                    },
+                    Tat {
+                        name: "O".to_owned(),
+                        element: element("O"),
+                        index: 1,
+                        id: 2,
+                    },
+                ),
+                (
+                    Tat {
+                        name: "C".to_owned(),
+                        element: element("C"),
+                        index: 0,
+                        id: 1,
+                    },
+                    Tat {
+                        name: "H1".to_owned(),
+                        element: element("H"),
+                        index: 2,
+                        id: 3,
+                    },
+                ),
+                (
+                    Tat {
+                        name: "C".to_owned(),
+                        element: element("C"),
+                        index: 0,
+                        id: 1,
+                    },
+                    Tat {
+                        name: "H2".to_owned(),
+                        element: element("H"),
+                        index: 3,
+                        id: 4,
+                    },
+                ),
+            ],
+            periodic_box_vectors: None,
+        };
+        // this is so stupid, I just need to get rid of the topology field on
+        // chain. it's obviously supposed to be a reference anyway, which I
+        // can't really handle with real lifetimes
+        let chain = topology::Chain {
+            index: 0,
+            topology: want_top.clone(),
+            id: "A".to_owned(),
+            residues: vec![],
+        };
+        want_top.chains.push(chain);
+        assert_eq!(
+            pdb.topology.periodic_box_vectors,
+            want_top.periodic_box_vectors
+        );
+        assert_eq!(pdb.topology.num_atoms, want_top.num_atoms, "num atoms");
+        assert_eq!(
+            pdb.topology.num_residues, want_top.num_residues,
+            "num residues"
+        );
+        // TODO fix atom serial numbers being in a random order
+        assert_eq!(pdb.topology.bonds.len(), want_top.bonds.len());
+        assert_eq!(
+            pdb.topology.bonds, want_top.bonds,
+            "bonds:\ngot:\n{:#?}\nwant:\n{:#?}",
+            pdb.topology.bonds, want_top.bonds
+        );
+        assert_eq!(pdb.topology.chains, want_top.chains, "chains");
+        assert_eq!(pdb.topology, want_top);
     }
 }
