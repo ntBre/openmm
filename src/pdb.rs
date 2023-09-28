@@ -404,17 +404,17 @@ impl Chain {
             );
             self.add_residue(residue);
         } else if self.current_residue().number != atom.residue_number {
+            // these two cases are actually the same as above
             panic!("case 2");
         } else if self.current_residue().insertion_code != atom.insertion_code {
             panic!("case 3");
         } else if self.current_residue().name_with_spaces
-            != atom.residue_name_with_spaces
+            == atom.residue_name_with_spaces
         {
-            panic!("case 4");
+            // normal case: number, name, and icode have not changed
         } else if atom.alternate_location_indicator() != " " {
-            panic!("case 5");
+            // ok - this is a point mutation, add_atom will know what to do
         } else {
-            //warning
             eprintln!("warning: two consecutive residues with the same number");
         }
         self.current_residue().add_atom(atom);
