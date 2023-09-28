@@ -1,3 +1,14 @@
+//! Load PDB files using the [PDBFile] struct. Internally, [PDBFile] creates a
+//! [PdbStructure], which constructs a hierarchy of [Model] -> [Chain] ->
+//! [Residue] -> [Atom]. By iterating along each of these, the [PDBFile] builds
+//! its [Topology] and vector of atomic positions. A common pattern in this file
+//! is the use of a `current_*` method that unwraps a `current_*` field on a
+//! struct and indexes the field corresponding to the `*`. For example,
+//! [PdbStructure::current_model] returns the
+//! PdbStructure.current_model.unwrap()th element in `self.models`. This is in
+//! contrast to the Python version, which simply stores a reference to the
+//! current element in its self.current_* field
+
 use crate::{
     element::{Element, BY_SYMBOL, EP},
     forcefield::ForceField,
