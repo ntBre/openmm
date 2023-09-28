@@ -23,20 +23,7 @@ pub mod state;
 pub mod system;
 pub mod topology;
 
-#[derive(Clone, Debug)]
-pub struct Quantity<T> {
-    pub value: T,
-    pub unit: String,
-}
-
-impl<T> Quantity<T> {
-    pub fn new(value: T, unit: impl Into<String>) -> Self {
-        Self {
-            value,
-            unit: unit.into(),
-        }
-    }
-}
+pub mod quantity;
 
 /// Simulation provides a simplified API for running simulations with OpenMM and
 /// reporting results.

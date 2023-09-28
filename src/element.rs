@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-use crate::Quantity;
+use crate::quantity::Quantity;
 
 #[derive(Clone, Debug)]
 #[allow(unused)]

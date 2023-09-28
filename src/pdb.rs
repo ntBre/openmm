@@ -9,11 +9,11 @@
 //! contrast to the Python version, which simply stores a reference to the
 //! current element in its self.current_* field
 
+use crate::quantity::Quantity;
 use crate::{
     element::{Element, BY_SYMBOL, EP},
     forcefield::ForceField,
     topology::{Topology, Vec3},
-    Quantity,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -707,7 +707,7 @@ pub(crate) static RESIDUE_NAME_REPLACEMENTS: LazyLock<HashMap<String, String>> =
 #[derive(Debug)]
 pub struct PDBFile {
     pub topology: Topology,
-    pub positions: Vec<Quantity<Vec<Vec3>>>,
+    pub positions: Quantity<Vec<Vec3>>,
 }
 
 impl PDBFile {
@@ -745,9 +745,9 @@ impl PDBFile {
                             continue;
                         }
                         processed_atom_names.insert(name);
-                        // TODO ensure nm
                         let Quantity { value: pos, .. } = atom.get_position();
-                        coords.push(pos.clone());
+                        // PDB coordinates are in Å so divide by 10 here for nm
+                        coords.push(pos.clone() * 0.1);
                     }
                 }
             }
@@ -756,7 +756,9 @@ impl PDBFile {
 
         Self {
             topology: top,
-            positions,
+            // if the file contains multiple frames, these are the positions in
+            // the first frame
+            positions: positions.swap_remove(0),
         }
     }
 }
@@ -827,13 +829,28 @@ impl Modeller {
 
 #[cfg(test)]
 mod tests {
+    use crate::vec3;
+
     use super::*;
 
     #[test]
     fn pdb_file() {
-        let pdb = PDBFile::new("testfiles/formaldehyde.pdb");
-        dbg!(&pdb);
-        assert_eq!(pdb.positions.len(), 1);
-        assert_eq!(pdb.positions[0].value.len(), 4);
+        let mut pdb = PDBFile::new("testfiles/formaldehyde.pdb");
+        // why are my positions in the reverse order??
+        assert_eq!(pdb.positions.len(), 4);
+        // the iteration over atom names is over a HashMap, so the order is
+        // random, unlike in Python. this isn't the best sort scheme but it
+        // works here at least
+        let want = Quantity {
+            value: vec![
+                vec3!(-0.10980000000000001, 0.0149, 0.0015),
+                vec3!(0.009500000000000001, 0.0011, 0.0),
+                vec3!(0.051300000000000005, -0.10980000000000001, -0.0004),
+                vec3!(0.059, 0.0938, -0.0011),
+            ],
+            unit: "nanometers".to_owned(),
+        };
+        pdb.positions.sort_by(|a, b| a.x.total_cmp(&b.x));
+        assert_eq!(pdb.positions, want);
     }
 }
