@@ -608,7 +608,7 @@ impl PdbStructure {
         self.reset_residue_numbers();
         let r = BufReader::new(f);
         for pdb_line in r.lines().flatten() {
-            let command = &pdb_line[..6];
+            let command = &pdb_line[..6.min(pdb_line.len())];
             match command {
                 "ATOM  " | "HETATM" => {
                     let atom = Atom::new(&pdb_line, self);
